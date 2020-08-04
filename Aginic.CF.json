@@ -99,11 +99,48 @@
             "DependsOn" : "AginicDBEC2Instance"
         },
 
+        "AginicWorkerEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "SecurityGroupIds": [ { "Ref": "AginicSecurityGroup" } ],
+                "KeyName": { "Ref": "KeyNameParameter" },
+                "ImageId": "ami-02769748522663066",
+                "Tags": [{"Key": "Name", "Value": "Aginic Worker Server"}],
+                "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+                    "#!/bin/bash -xe \n",
+                    "yum install -y git \n",
+                    "#\n",
+                    "curl -sL https://rpm.nodesource.com/setup_14.x | bash - \n",
+                    "yum install -y nodejs \n",
+                    "#\n",
+                    "su ec2-user -c 'git clone https://github.com/jastupp/aginic-worker.git /home/ec2-user/worker' \n",
+                    "cd /home/ec2-user/worker \n",
+                    "su ec2-user -c 'npm install' \n",
+                    "#\n",
+                    "su ec2-user -c '",
+                    "MYSQL_HOST=",{ "Fn::GetAtt" : [ "AginicDBEC2Instance", "PrivateIp" ]},
+                        " MYSQL_USERNAME=",{ "Ref" : "DBUsername"},
+                        " MYSQL_PASSWORD=",{ "Ref" : "DBPassword"},
+                        " MYSQL_DATABASE=",{ "Ref" : "DataBaseName"},
+                        " npm start &' \n",
+                    "#\n"
+                ]]}}
+            },
+            "DependsOn" : "AginicDBEC2Instance"
+        },
+
+
         "AginicSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "Place holder SG",
-                "SecurityGroupIngress": [ ],
+                "SecurityGroupIngress": [{
+                    "IpProtocol": "tcp",
+                    "FromPort": "22",
+                    "ToPort": "22",
+                    "CidrIp": "0.0.0.0/0"
+                }],
                 "VpcId": { "Ref": "VPCIdParameter" },
                 "Tags": [{"Key": "Name", "Value": "Aginic Seurity Group"}]
             }
@@ -113,17 +150,12 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "Enable SSH access via port 22",
-                "SecurityGroupIngress": [ {
-                    "IpProtocol": "tcp",
-                    "FromPort": "22",
-                    "ToPort": "22",
-                    "CidrIp": "0.0.0.0/0"
-                }, {
+                "SecurityGroupIngress": [{
                     "IpProtocol": "tcp",
                     "FromPort": "5000",
                     "ToPort": "5000",
                     "CidrIp": "0.0.0.0/0"
-                } , {
+                }, {
                     "IpProtocol": "tcp",
                     "FromPort": "3001",
                     "ToPort": "3001",
@@ -136,13 +168,8 @@
         "AginicDBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Enable SSH access via port 22",
-                "SecurityGroupIngress": [ {
-                    "IpProtocol": "tcp",
-                    "FromPort": "22",
-                    "ToPort": "22",
-                    "CidrIp": "0.0.0.0/0"
-                }, {
+                "GroupDescription": "Expoe mySQL port",
+                "SecurityGroupIngress": [{
                     "IpProtocol": "tcp",
                     "FromPort": "3306",
                     "ToPort": "3306",
@@ -151,6 +178,12 @@
                 "VpcId": { "Ref": "VPCIdParameter" },
                 "Tags": [{"Key": "Name", "Value": "Aginic DB Seurity Group"}]
             }
+        }
+    },
+    "Outputs": {
+        "ApplicationURL" : {
+            "Description": "The DNSName of the server",
+            "Value": { "Fn::Sub": ["http://${url}:5000", { "url": { "Fn::GetAtt": [ "AginicReactEC2Instance", "PublicIp" ] } }] }
         }
     }
 }

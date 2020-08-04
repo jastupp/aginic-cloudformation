@@ -1,0 +1,60 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Deploy Aginic code test DB",
+
+    "Parameters": {
+        "KeyNameParameter": {
+            "Description": "Key pair name for the EC2 instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "VPCIdParameter": {
+            "Description": "The VPC id",
+            "Type": "AWS::EC2::VPC::Id"
+        }
+    },
+
+    "Resources": {
+
+        "AginicDBEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "SecurityGroupIds": [ { "Ref": "AginicDBSecurityGroup" } ],
+                "KeyName": { "Ref": "KeyNameParameter" },
+                "ImageId": "ami-02769748522663066",
+                "Tags": [{"Key": "Name", "Value": "Aginic DB"}],
+                "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+                    "#!/bin/bash -xe \n",
+                    "yum install -y git \n",
+                    "#\n",
+                    "yum install -y mysql \n",
+                    "yum install -y mysql-server \n",
+                    "#\n",
+                    "service mysqld start \n",
+                    "#\n",
+                    "mysql -u root -e \"create database aginic ; GRANT ALL ON *.* TO 'aginic'@'localhost' IDENTIFIED BY 'pass';\" \n",
+                    "mysql -uaginic -ppass -e \"create table aginic.ServerTasks (id int not null AUTO_INCREMENT, URL varchar(100) not null, state ENUM ('WAITING', 'PENDING', 'SUCCESS', 'FAILURE'), CONSTRAINT SERVER_TEST_PK primary key (id));\" \n",
+                ]]}}
+            }
+        },
+
+        "AginicDBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable SSH access via port 22",
+                "SecurityGroupIngress": [ {
+                    "IpProtocol": "tcp",
+                    "FromPort": "22",
+                    "ToPort": "22",
+                    "CidrIp": "0.0.0.0/0"
+                }],
+                "VpcId": { "Ref": "VPCIdParameter" },
+                "Tags": [{"Key": "Name", "Value": "Aginic DB Seurity Group"}]
+            }
+        }
+    }
+}
+
+drop user 'aginic'@'ip-172-31-38-22.ap-southeast-2.compute.internal';
+create user 'aginic'@'ip-172-31-38-22.ap-southeast-2.compute.internal' identified by 'pass'
+grant SELECT,INSERT,UPDATE on aginic.* to 'aginic'@'ip-172-31-38-22.ap-southeast-2.compute.internal' identified by 'pass';

@@ -10,16 +10,63 @@
         "VPCIdParameter": {
             "Description": "The VPC id",
             "Type": "AWS::EC2::VPC::Id"
+        },
+        "DBUsername": {
+            "Description": "The DB username",
+            "Type": "String",
+            "Default": "aginic"
+        },
+        "DBPassword": {
+            "Description": "The DB password ",
+            "Type": "String",
+            "Default": "ChangeMe"
+        },
+        "DataBaseName": {
+            "Description": "The database",
+            "Type": "String",
+            "Default": "aginic"
         }
     },
 
     "Resources": {
 
+        "AginicDBEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "SecurityGroupIds": [ { "Ref": "AginicDBSecurityGroup" }, { "Ref": "AginicSecurityGroup"}],
+                "KeyName": { "Ref": "KeyNameParameter" },
+                "ImageId": "ami-02769748522663066",
+                "Tags": [{"Key": "Name", "Value": "Aginic DB"}],
+                "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+                    "#!/bin/bash -xe \n",
+                    "#\n",
+                    "yum install -y mysql \n",
+                    "yum install -y mysql-server \n",
+                    "#\n",
+                    "service mysqld start \n",
+                    "#\n",
+                    "mysql -u root -e \"create database ",
+                        { "Ref" : "DataBaseName"},
+                        " ; GRANT SELECT,INSERT,UPDATE ON ",
+                        { "Ref" : "DataBaseName"},
+                        ".* TO '",
+                        { "Ref" : "DBUsername"},
+                        "'@'%' IDENTIFIED BY '",
+                        { "Ref" : "DBPassword"},
+                        "';\" \n",
+                    "mysql -u root -e \"create table ",
+                        { "Ref" : "DataBaseName"},
+                        ".ServerTasks (id int not null AUTO_INCREMENT, URL varchar(100) not null, state ENUM ('WAITING', 'PENDING', 'SUCCESS', 'FAILURE'), CONSTRAINT SERVER_TEST_PK primary key (id));\" \n"
+                ]]}}
+            }
+        },
+
         "AginicReactEC2Instance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "InstanceType": "t2.micro",
-                "SecurityGroupIds": [ { "Ref": "AginicReactSecurityGroup" } ],
+                "SecurityGroupIds": [ { "Ref": "AginicReactSecurityGroup" }, { "Ref": "AginicSecurityGroup" } ],
                 "KeyName": { "Ref": "KeyNameParameter" },
                 "ImageId": "ami-02769748522663066",
                 "Tags": [{"Key": "Name", "Value": "Aginic React Server"}],
@@ -30,19 +77,35 @@
                     "curl -sL https://rpm.nodesource.com/setup_14.x | bash - \n",
                     "yum install -y nodejs \n",
                     "#\n",
-                    "su ec2-user -c 'git clone https://github.com/jastupp/aginic-front-end.git /home/ec2-user/front-end' \n",
+                    "su ec2-user -c 'git clone https://github.com/jastupp/aginic-rest-server.git /home/ec2-user/rest-server' \n",
+                    "cd /home/ec2-user/rest-server \n",
+                    "su ec2-user -c 'npm install' \n",
                     "#\n",
+                    "su ec2-user -c '",
+                        "MYSQL_HOST=",{ "Fn::GetAtt" : [ "AginicDBEC2Instance", "PrivateIp" ]},
+                        " MYSQL_USERNAME=",{ "Ref" : "DBUsername"},
+                        " MYSQL_PASSWORD=",{ "Ref" : "DBPassword"},
+                        " MYSQL_DATABASE=",{ "Ref" : "DataBaseName"},
+                        " npm start &' \n",
+                    "#\n",
+                    "su ec2-user -c 'git clone https://github.com/jastupp/aginic-front-end.git /home/ec2-user/front-end' \n",
                     "cd /home/ec2-user/front-end \n",
                     "su ec2-user -c 'npm install' \n",
                     "su ec2-user -c 'npm run build' \n",
                     "npm install -g serve \n",
-                    "su ec2-user -c 'serve -s build &' \n",
-                    "#\n",
-                    "su ec2-user -c 'git clone https://github.com/jastupp/aginic-rest-server.git /home/ec2-user/rest-server' \n",
-                    "cd /home/ec2-user/rest-server \n",
-                    "su ec2-user -c 'npm install' \n",
-                    "su ec2-user -c 'npm start &' \n"
+                    "su ec2-user -c 'serve -s build'\n"
                 ]]}}
+            },
+            "DependsOn" : "AginicDBEC2Instance"
+        },
+
+        "AginicSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Place holder SG",
+                "SecurityGroupIngress": [ ],
+                "VpcId": { "Ref": "VPCIdParameter" },
+                "Tags": [{"Key": "Name", "Value": "Aginic Seurity Group"}]
             }
         },
 
@@ -57,17 +120,36 @@
                     "CidrIp": "0.0.0.0/0"
                 }, {
                     "IpProtocol": "tcp",
-                    "FromPort": "3000",
-                    "ToPort": "3000",
-                    "CidrIp": "0.0.0.0/0"
-                }, {
-                    "IpProtocol": "tcp",
                     "FromPort": "5000",
                     "ToPort": "5000",
                     "CidrIp": "0.0.0.0/0"
-                } ],
+                } , {
+                    "IpProtocol": "tcp",
+                    "FromPort": "3001",
+                    "ToPort": "3001",
+                    "CidrIp": "0.0.0.0/0"
+                }],
                 "VpcId": { "Ref": "VPCIdParameter" },
                 "Tags": [{"Key": "Name", "Value": "Aginic React Seurity Group"}]
+            }
+        },
+        "AginicDBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable SSH access via port 22",
+                "SecurityGroupIngress": [ {
+                    "IpProtocol": "tcp",
+                    "FromPort": "22",
+                    "ToPort": "22",
+                    "CidrIp": "0.0.0.0/0"
+                }, {
+                    "IpProtocol": "tcp",
+                    "FromPort": "3306",
+                    "ToPort": "3306",
+                    "SourceSecurityGroupId": { "Ref": "AginicSecurityGroup"}
+                }],
+                "VpcId": { "Ref": "VPCIdParameter" },
+                "Tags": [{"Key": "Name", "Value": "Aginic DB Seurity Group"}]
             }
         }
     }

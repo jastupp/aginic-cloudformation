@@ -5,8 +5,7 @@
     "Parameters": {
         "KeyNameParameter": {
             "Description": "Key pair name for the EC2 instance",
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Default": "none"
+            "Type": "AWS::EC2::KeyPair::KeyName"
         },
         "VPCIdParameter": {
             "Description": "The VPC id",
@@ -136,7 +135,12 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "Place holder SG",
-                "SecurityGroupIngress": [],
+                "SecurityGroupIngress": [{
+                    "IpProtocol": "tcp",
+                    "FromPort": "22",
+                    "ToPort": "22",
+                    "CidrIp": "0.0.0.0/0"
+                }],
                 "VpcId": { "Ref": "VPCIdParameter" },
                 "Tags": [{"Key": "Name", "Value": "Aginic Seurity Group"}]
             }

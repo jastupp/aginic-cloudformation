@@ -5,7 +5,8 @@
     "Parameters": {
         "KeyNameParameter": {
             "Description": "Key pair name for the EC2 instance",
-            "Type": "AWS::EC2::KeyPair::KeyName"
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Default": "none"
         },
         "VPCIdParameter": {
             "Description": "The VPC id",
